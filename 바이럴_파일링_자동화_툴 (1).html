@@ -1,0 +1,1915 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>바이럴 소재 배정 자동화</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #EFF8FF;
+  --surface: #FFFFFF;
+  --surface2: #E0F2FE;
+  --border: rgba(14,116,168,0.12);
+  --border-md: rgba(14,116,168,0.22);
+  --text: #0C2D48;
+  --text2: #3B7AA8;
+  --text3: #7DB9D9;
+  --accent-light: #DBEAFE;
+  --success-bg: #EAF3DE;
+  --success-border: #C0DD97;
+  --success-text: #3B6D11;
+  --error-bg: #FCEBEB;
+  --error-border: #F09595;
+  --error-text: #A32D2D;
+  --warn-bg: #FAEEDA;
+  --warn-border: #FAC775;
+  --warn-text: #854F0B;
+  --blue-bg: #DBEAFE;
+  --blue-text: #1D5FA8;
+  --radius: 10px;
+  --radius-sm: 6px;
+}
+
+body {
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+.layout { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+
+/* ── Sidebar ── */
+.sidebar {
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 2rem 1.5rem;
+  position: sticky; top: 0;
+  height: 100vh; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 2rem;
+}
+.sidebar-logo { display: flex; align-items: center; gap: 10px; }
+.logo-mark { width: 32px; height: 32px; background: var(--text); border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+.logo-mark svg { width: 18px; height: 18px; }
+.logo-text { font-size: 14px; font-weight: 600; letter-spacing: -0.3px; }
+.logo-sub { font-size: 11px; color: var(--text3); }
+.nav-label { font-size: 11px; font-weight: 600; color: var(--text3); letter-spacing: .06em; text-transform: uppercase; margin-bottom: 6px; }
+.nav-steps { display: flex; flex-direction: column; gap: 2px; }
+.nav-step { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius-sm); cursor: pointer; transition: background .12s; color: var(--text2); font-size: 13px; }
+.nav-step:hover { background: var(--surface2); color: var(--text); }
+.nav-step.active { background: var(--accent-light); color: var(--text); font-weight: 500; }
+.step-dot { width: 22px; height: 22px; border-radius: 50%; background: var(--surface2); border: 1px solid var(--border-md); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; flex-shrink: 0; color: var(--text2); }
+.sidebar-footer { margin-top: auto; font-size: 11px; color: var(--text3); line-height: 1.7; padding-top: 1.5rem; border-top: 1px solid var(--border); }
+
+/* ── Main page tabs (영상 / 배너) ── */
+.main-tabs { display: flex; gap: 4px; margin-bottom: 2rem; background: var(--surface2); border-radius: var(--radius); padding: 4px; width: fit-content; }
+.main-tab { padding: .45rem 1.1rem; font-size: 13px; font-weight: 500; border: none; background: transparent; color: var(--text2); border-radius: var(--radius-sm); cursor: pointer; font-family: inherit; transition: background .12s, color .12s; }
+.main-tab.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.main-tab:hover:not(.active) { color: var(--text); }
+.tab-page { display: none; }
+.tab-page.active { display: block; }
+
+/* ── Banner: cover preview chips ── */
+.cover-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; border-radius: 20px; padding: 2px 9px; border: 1px solid var(--border); margin: 2px 3px 2px 0; font-family: 'Courier New', monospace; }
+.cover-chip.normal { background: var(--blue-bg); color: var(--blue-text); border-color: #B5D4F4; }
+.cover-chip.original { background: var(--warn-bg); color: var(--warn-text); border-color: var(--warn-border); }
+.cover-chip.inner { background: var(--success-bg); color: var(--success-text); border-color: var(--success-border); }
+.cover-chip.pinned { background: #FDE8FF; color: #7E22CE; border-color: #D8B4FE; }
+
+/* ── Mother card date-lock / channel-lock / caption ── */
+.date-lock-wrap { display: flex; align-items: center; gap: 8px; padding: .55rem 1rem; border-top: 1px solid var(--border); background: var(--surface); }
+.date-lock-label { font-size: 12px; color: var(--text2); white-space: nowrap; display: flex; align-items: center; gap: 5px; }
+.date-lock-input { flex: 1; border: 1px solid var(--border-md); border-radius: var(--radius-sm); padding: 5px 9px; font-size: 12px; font-family: inherit; color: var(--text); background: var(--surface); }
+.date-lock-input:focus { outline: none; border-color: var(--text); }
+.date-lock-input.active { border-color: #7E22CE; background: #FDF4FF; }
+.caption-wrap { padding: .6rem 1rem; border-top: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; gap: 6px; }
+.caption-label { font-size: 12px; color: var(--text2); display: flex; align-items: center; gap: 5px; }
+.caption-textarea { width: 100%; min-height: 70px; border: 1px solid var(--border-md); border-radius: var(--radius-sm); padding: 7px 10px; font-size: 12px; font-family: inherit; color: var(--text); background: var(--surface); resize: vertical; line-height: 1.5; }
+.caption-textarea:focus { outline: none; border-color: #2563eb; background: #F8FBFF; }
+.caption-textarea.has-content { border-color: #2563eb; background: #EFF6FF; }
+/* ── History panel ── */
+.hist-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.25rem; }
+.hist-day { margin-bottom: .75rem; }
+.hist-day-label { font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .05em; padding: 4px 0; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+.hist-row { font-size: 12px; color: var(--text2); padding: 3px 0; border-bottom: 1px solid var(--border); display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.hist-row:last-child { border: none; }
+.hist-badge { font-size: 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 1px 7px; white-space: nowrap; flex-shrink: 0; }
+.hist-badge.video { background: #DBEAFE; color: #1D5FA8; border-color: #B5D4F4; }
+.hist-badge.banner { background: #EAF3DE; color: #3B6D11; border-color: #C0DD97; }
+.hist-empty { font-size: 13px; color: var(--text3); text-align: center; padding: 1.5rem 0; }
+.cover-check-list { display: flex; flex-direction: column; gap: 4px; }
+.cover-check-row { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: var(--radius-sm); cursor: pointer; transition: background .1s; }
+.cover-check-row:hover { background: var(--surface2); }
+.cover-check-row input[type=checkbox] { width: 15px; height: 15px; accent-color: #7E22CE; cursor: pointer; flex-shrink: 0; }
+.cover-check-row label { font-size: 12px; font-family: 'Courier New', monospace; cursor: pointer; flex: 1; color: var(--text); }
+.cover-check-row.is-pinned label { color: #7E22CE; font-weight: 600; }
+.cover-check-row.is-original label { color: var(--warn-text); }
+.pinned-count { font-size: 11px; color: #7E22CE; background: #FDE8FF; border: 1px solid #D8B4FE; border-radius: 20px; padding: 1px 8px; margin-left: 6px; }
+.page-header { margin-bottom: 2rem; }
+.page-title { font-size: 22px; font-weight: 600; letter-spacing: -0.5px; margin-bottom: 4px; }
+.page-sub { font-size: 13px; color: var(--text2); }
+
+/* ── Cards ── */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; margin-bottom: 1rem; }
+.card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 1.25rem; }
+.card-num { width: 26px; height: 26px; border-radius: 50%; background: var(--surface2); border: 1px solid var(--border-md); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: var(--text2); flex-shrink: 0; }
+.card-title { font-size: 15px; font-weight: 600; }
+
+/* ── Drop zone ── */
+.drop-zone { border: 1.5px dashed var(--border-md); border-radius: var(--radius-sm); padding: 2rem; text-align: center; cursor: pointer; transition: background .15s, border-color .15s; color: var(--text2); }
+.drop-zone:hover, .drop-zone.dragover { background: var(--surface2); border-color: var(--text3); }
+.drop-zone svg { width: 32px; height: 32px; margin-bottom: 8px; opacity: .4; }
+.drop-zone p { font-size: 13px; }
+.drop-zone span { font-size: 11px; color: var(--text3); display: block; margin-top: 3px; }
+
+/* ── Mother cards ── */
+.mother-list { display: flex; flex-direction: column; gap: 10px; margin-top: .75rem; }
+.mother-card { border: 1px solid var(--border-md); border-radius: var(--radius-sm); overflow: hidden; }
+.mother-card-top { display: flex; align-items: center; gap: 10px; padding: .65rem 1rem; background: var(--surface2); }
+.mother-icon { opacity: .5; flex-shrink: 0; }
+.mother-icon svg { width: 16px; height: 16px; }
+.mother-name { flex: 1; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mother-num { font-size: 11px; color: var(--text3); background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 2px 8px; flex-shrink: 0; }
+.icon-btn { background: none; border: none; cursor: pointer; padding: 3px; color: var(--text3); display: flex; align-items: center; border-radius: 4px; }
+.icon-btn:hover { color: var(--text); background: rgba(0,0,0,0.06); }
+.icon-btn svg { width: 15px; height: 15px; }
+
+/* ── Thumb table (per-video) ── */
+.thumb-table-wrap { background: var(--surface); border-top: 1px solid var(--border); }
+.thumb-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.thumb-table th { padding: 8px 14px; font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .04em; background: #FAFAF8; border-bottom: 1px solid var(--border); text-align: left; }
+.thumb-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.thumb-table tr:last-child td { border-bottom: none; }
+.thumb-table tr:hover td { background: #FAFAF8; }
+.vid-name { font-family: 'Courier New', monospace; font-size: 12px; color: var(--text); line-height: 1.5; word-break: break-all; }
+.thumb-inp-wrap { display: flex; align-items: center; gap: 8px; }
+.thumb-inp {
+  width: 90px; border: 1px solid var(--border-md);
+  border-radius: var(--radius-sm); padding: 7px 10px;
+  font-size: 14px; font-weight: 500; text-align: center;
+  font-family: inherit; color: var(--text); background: var(--surface);
+  transition: border-color .12s;
+}
+.thumb-inp:focus { outline: none; border-color: var(--text); box-shadow: 0 0 0 3px rgba(0,0,0,0.06); }
+.thumb-inp::placeholder { color: var(--text3); font-weight: 400; }
+.sec-label { font-size: 13px; color: var(--text2); }
+.thumb-tag { font-size: 12px; color: var(--text3); font-family: 'Courier New', monospace; background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 3px 8px; white-space: nowrap; }
+.thumb-tag.filled { color: var(--blue-text); background: var(--blue-bg); border-color: #B5D4F4; }
+.loading-row td { padding: 14px; text-align: center; color: var(--text3); font-size: 12px; }
+
+/* ── Schedule table ── */
+.sched-wrap { border: 1px solid var(--border-md); border-radius: var(--radius-sm); overflow: hidden; }
+.sched-table { width: 100%; border-collapse: collapse; user-select: none; }
+.sched-table th { font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .05em; padding: 8px 10px; background: var(--surface2); border-bottom: 1px solid var(--border-md); text-align: left; }
+.sched-table td { border-bottom: 1px solid var(--border); padding: 0; position: relative; }
+.sched-table tr:last-child td { border-bottom: none; }
+.sched-table td.rn { width: 36px; text-align: center; font-size: 11px; color: var(--text3); padding: 0 4px; }
+.sched-table td.del { width: 36px; text-align: center; padding: 0 4px; }
+.sched-table td input { width: 100%; border: none; background: transparent; padding: 8px 10px; font-size: 13px; color: var(--text); font-family: inherit; outline: none; user-select: text; }
+.sched-table td input:focus { background: #FAFAF8; }
+/* cell selected highlight */
+.sched-table td.sel { background: #dbeafe !important; }
+.sched-table td.sel input { background: transparent; }
+/* fill handle — small square at bottom-right of focused cell */
+.fill-handle {
+  position: absolute; bottom: -4px; right: -4px;
+  width: 8px; height: 8px;
+  background: #2563eb; border: 1.5px solid white;
+  border-radius: 1px; cursor: crosshair; z-index: 10;
+  display: none;
+}
+.sched-table td.focused { outline: 2px solid #2563eb; outline-offset: -2px; }
+.sched-table td.focused .fill-handle { display: block; }
+/* fill preview highlight */
+.sched-table td.fill-preview { background: #dbeafe !important; }
+.sched-table td.fill-preview input { background: transparent; }
+/* copy toast */
+.copy-toast { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%) translateY(8px); background: var(--text); color: white; font-size: 12px; padding: 7px 16px; border-radius: 20px; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 9999; }
+.copy-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+/* ── Context menu ── */
+.ctx-menu { position: fixed; z-index: 10000; background: var(--surface); border: 1px solid var(--border-md); border-radius: var(--radius-sm); box-shadow: 0 4px 16px rgba(0,0,0,0.12); padding: 4px 0; min-width: 170px; display: none; }
+.ctx-menu.show { display: block; }
+.ctx-item { padding: 7px 14px; font-size: 13px; cursor: pointer; color: var(--text); display: flex; align-items: center; gap: 8px; }
+.ctx-item:hover { background: var(--surface2); }
+.ctx-item svg { width: 13px; height: 13px; opacity: .55; flex-shrink: 0; }
+.ctx-sep { height: 1px; background: var(--border); margin: 3px 0; }
+/* col header clickable */
+.sched-table th.col-hdr { cursor: pointer; user-select: none; }
+.sched-table th.col-hdr:hover { background: #E8E8E5; }
+.col-hint { font-size: 10px; opacity: .45; margin-left: 3px; font-weight: 400; }
+/* select-all corner button */
+.sel-all-btn {
+  width: 22px; height: 22px; border-radius: 4px;
+  border: 1px solid var(--border-md); background: var(--surface2);
+  color: var(--text2); font-size: 13px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto; transition: background .12s;
+}
+.sel-all-btn:hover { background: var(--accent-light); color: var(--text); }
+.add-row-btn { margin-top: 8px; font-size: 12px; color: var(--text2); background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 5px; padding: 4px 2px; font-family: inherit; }
+.add-row-btn:hover { color: var(--text); }
+.add-row-btn svg { width: 14px; height: 14px; }
+.hint { font-size: 12px; color: var(--text3); margin-top: .5rem; line-height: 1.6; }
+.hint code { background: var(--surface2); border: 1px solid var(--border); padding: 1px 5px; border-radius: 4px; font-size: 11px; }
+
+/* ── Run button ── */
+.run-btn { width: 100%; padding: .85rem; border-radius: var(--radius-sm); border: none; background: var(--text); color: white; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; font-family: inherit; transition: opacity .15s; letter-spacing: -0.2px; }
+.run-btn:hover { opacity: .85; }
+.run-btn:disabled { opacity: .35; cursor: not-allowed; }
+.run-btn svg { width: 18px; height: 18px; }
+
+/* ── Messages ── */
+.msg { border-radius: var(--radius-sm); padding: .65rem .9rem; font-size: 13px; margin-top: .75rem; display: flex; align-items: flex-start; gap: 8px; }
+.msg svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 1px; }
+.msg.ok { background: var(--success-bg); border: 1px solid var(--success-border); color: var(--success-text); }
+.msg.error { background: var(--error-bg); border: 1px solid var(--error-border); color: var(--error-text); }
+.msg.warn { background: var(--warn-bg); border: 1px solid var(--warn-border); color: var(--warn-text); }
+
+.spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.3); border-top-color: white; border-radius: 50%; animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Results ── */
+.result-card { display: none; }
+.result-card.visible { display: block; }
+.tabs { display: flex; border-bottom: 1px solid var(--border-md); margin-bottom: 1rem; }
+.tab { padding: .5rem 1rem; font-size: 13px; cursor: pointer; border: none; background: none; color: var(--text2); border-bottom: 2px solid transparent; margin-bottom: -1px; font-family: inherit; transition: color .12s; }
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--text); border-bottom-color: var(--text); font-weight: 600; }
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+.result-actions { display: flex; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap; }
+.dl-btn { padding: .4rem .9rem; font-size: 12px; font-weight: 500; border: 1px solid var(--border-md); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); cursor: pointer; display: flex; align-items: center; gap: 6px; font-family: inherit; transition: background .12s; }
+.dl-btn:hover { background: var(--surface2); }
+.dl-btn svg { width: 14px; height: 14px; }
+
+/* ── Data table (result) ── */
+.result-scroll { overflow-x: auto; }
+.data-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 600px; }
+.data-table th { text-align: left; padding: 8px 12px; background: var(--surface2); border-bottom: 1px solid var(--border-md); font-weight: 600; color: var(--text2); font-size: 12px; white-space: nowrap; }
+.data-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; color: var(--text); }
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tr:hover td { background: #F0F9FF; }
+
+/* key fix: no wrap on company/date/channel, wrap only on long filename cols */
+.data-table td.nowrap { white-space: nowrap; }
+.data-table td.mono { font-family: 'Courier New', monospace; font-size: 11px; word-break: break-all; }
+.data-table td.company-cell { white-space: nowrap; font-weight: 500; }
+
+.company-block { margin-bottom: 1.75rem; }
+.company-label { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; padding: .5rem .75rem; background: var(--surface2); border-radius: var(--radius-sm); margin-bottom: .5rem; border: 1px solid var(--border); }
+.company-count { font-size: 11px; color: var(--text3); font-weight: 400; }
+.co-dl { margin-left: auto; }
+.conflict-row { font-size: 13px; padding: 8px 0; border-bottom: 1px solid var(--border); color: var(--text2); line-height: 1.7; }
+.conflict-row:last-child { border: none; }
+.conflict-row b { color: var(--text); }
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+      </div>
+      <div>
+        <div class="logo-text">바이럴 소재 배정</div>
+        <div class="logo-sub">Viral Contents Assignment</div>
+      </div>
+    </div>
+    <div>
+      <div class="nav-label">모드</div>
+      <div class="nav-steps">
+        <div class="nav-step active" id="modeVideo" onclick="switchMode('video')">
+          <div class="step-dot">▶</div> 영상 배정
+        </div>
+        <div class="nav-step" id="modeBanner" onclick="switchMode('banner')">
+          <div class="step-dot">🖼</div> 배너 배정
+        </div>
+        <div class="nav-step" id="modeHistory" onclick="switchMode('history')">
+          <div class="step-dot">📋</div> 배정 히스토리
+        </div>
+      </div>
+    </div>
+    <div id="sideNav">
+      <div class="nav-label">진행 순서</div>
+      <div class="nav-steps" id="stepNav">
+        <div class="nav-step active" id="nav1" onclick="goTo('step1')"><div class="step-dot" id="dot1">1</div> 마더파일 업로드</div>
+        <div class="nav-step" id="nav2" onclick="goTo('step2')"><div class="step-dot" id="dot2">2</div> 스케줄 입력</div>
+        <div class="nav-step" id="nav3" onclick="goTo('step3')"><div class="step-dot" id="dot3">3</div> 배정 실행</div>
+        <div class="nav-step" id="nav4" onclick="goTo('step4')"><div class="step-dot" id="dot4">4</div> 결과 확인</div>
+      </div>
+    </div>
+    <div class="sidebar-footer">
+      <b>엑셀 붙여넣기 팁</b><br>
+      스케줄 표에서 날짜·업체명·채널명 3열을 복사 후 아무 셀에나 Ctrl+V하면 자동 입력됩니다.<br><br>
+      <b>썸네일 초수</b><br>
+      마더파일 내 영상마다 개별 입력 가능합니다.<br><br>
+      <b>ZIP 형식만 지원</b><br>
+      RAR/7z는 ZIP으로 변환 후 사용하세요.
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+
+    <!-- ── 영상 탭 ── -->
+    <div class="tab-page active" id="page-video">
+    <div class="page-header">
+      <div class="page-title">영상 소재 배정 자동화</div>
+      <div class="page-sub">마더파일 업로드 → 스케줄 입력 → 실행 → 업체별 ZIP 다운로드</div>
+    </div>
+
+    <!-- Step 1 -->
+    <div class="card" id="step1">
+      <div class="card-header">
+        <div class="card-num">1</div>
+        <div class="card-title">마더파일 업로드 및 썸네일 초수 입력</div>
+      </div>
+      <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+        <p>ZIP 압축파일을 드래그하거나 클릭해서 추가</p>
+        <span>여러 파일 동시 선택 가능 — 업로드 후 영상별 썸네일 초수를 입력하세요</span>
+      </div>
+      <input type="file" id="fileInput" multiple accept=".zip" style="display:none">
+      <div class="mother-list" id="motherList"></div>
+    </div>
+
+    <!-- Step 2 -->
+    <div class="card" id="step2">
+      <div class="card-header">
+        <div class="card-num">2</div>
+        <div class="card-title">업로드 스케줄 입력</div>
+      </div>
+      <div class="sched-wrap">
+        <table class="sched-table">
+          <thead>
+            <tr>
+              <th style="width:36px" title="전체 선택 후 Ctrl+C로 복사">
+                <button class="sel-all-btn" onclick="selectAll('video')" title="전체 복사">⊞</button>
+              </th>
+              <th style="width:130px">날짜</th>
+              <th style="width:160px">업체명</th>
+              <th>채널명</th>
+              <th style="width:36px"></th>
+            </tr>
+          </thead>
+          <tbody id="schedBody"></tbody>
+        </table>
+      </div>
+      <button class="add-row-btn" onclick="addRow()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        행 추가
+      </button>
+      <p class="hint">좌상단 <b>⊞</b> 클릭하면 전체 선택 → <code>Ctrl+C</code> 복사 &nbsp;|&nbsp; 마우스 <b>드래그</b>로 범위 선택 후 <code>Ctrl+C</code> &nbsp;|&nbsp; 엑셀에서 <code>Ctrl+V</code> 붙여넣기 &nbsp;|&nbsp; <b>■ 핸들 드래그</b>로 자동 채우기</p>
+    </div>
+
+    <!-- Step 3 -->
+    <div class="card" id="step3">
+      <div class="card-header">
+        <div class="card-num">3</div>
+        <div class="card-title">배정 실행</div>
+      </div>
+      <button class="run-btn" id="runBtn" onclick="runProcess()">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 9-14 9V3z"/></svg>
+        배정 실행
+      </button>
+      <div id="runMsg"></div>
+    </div>
+
+    <!-- Step 4 -->
+    <div class="card result-card" id="step4">
+      <div class="card-header">
+        <div class="card-num">4</div>
+        <div class="card-title">결과</div>
+      </div>
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('byCompany',this)">업체별 배정</button>
+        <button class="tab" onclick="switchTab('allTable',this)">전체 배정표</button>
+        <button class="tab" onclick="switchTab('conflicts',this)">충돌 처리</button>
+      </div>
+      <div class="result-actions">
+        <button class="dl-btn" onclick="downloadCSV()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/></svg>
+          CSV 다운로드
+        </button>
+        <button class="dl-btn" onclick="downloadZipAll()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          업체별 ZIP 일괄 다운로드
+        </button>
+      </div>
+      <div class="tab-pane active" id="pane-byCompany"><div id="byCompanyContent"></div></div>
+      <div class="tab-pane" id="pane-allTable"><div id="allTableContent"></div></div>
+      <div class="tab-pane" id="pane-conflicts"><div id="conflictsContent"></div></div>
+    </div>
+    </div><!-- /page-video -->
+
+    <!-- ── 배너 탭 ── -->
+    <div class="tab-page" id="page-banner">
+    <div class="page-header">
+      <div class="page-title">배너 배정 자동화</div>
+      <div class="page-sub">마더파일(표지+속지) 업로드 → 스케줄 입력 → 실행 → 업체별 ZIP 다운로드</div>
+    </div>
+
+    <!-- B-Step 1 -->
+    <div class="card" id="bstep1">
+      <div class="card-header"><div class="card-num">1</div><div class="card-title">마더파일 업로드</div></div>
+      <div class="drop-zone" id="bDropZone" onclick="document.getElementById('bFileInput').click()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+        <p>ZIP 압축파일을 드래그하거나 클릭해서 추가</p>
+        <span>ZIP 안에 파일명에 "표지" 포함된 이미지와 "속지" 포함된 이미지가 함께 있어야 합니다</span>
+      </div>
+      <input type="file" id="bFileInput" multiple accept=".zip" style="display:none">
+      <div class="mother-list" id="bMotherList"></div>
+    </div>
+
+    <!-- B-Step 2 -->
+    <div class="card" id="bstep2">
+      <div class="card-header"><div class="card-num">2</div><div class="card-title">업로드 스케줄 입력</div></div>
+      <div class="sched-wrap">
+        <table class="sched-table">
+          <thead><tr>
+            <th style="width:36px">
+              <button class="sel-all-btn" onclick="selectAll('banner')" title="전체 선택">⊞</button>
+            </th>
+            <th style="width:130px">날짜</th>
+            <th style="width:160px">업체명</th>
+            <th>채널명</th>
+            <th style="width:36px"></th>
+          </tr></thead>
+          <tbody id="bSchedBody"></tbody>
+        </table>
+      </div>
+      <button class="add-row-btn" onclick="bAddRow()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        행 추가
+      </button>
+      <p class="hint">좌상단 <b>⊞</b> 클릭하면 전체 선택 → <code>Ctrl+C</code> 복사 &nbsp;|&nbsp; 마우스 <b>드래그</b>로 범위 선택 후 <code>Ctrl+C</code> &nbsp;|&nbsp; 엑셀에서 <code>Ctrl+V</code> 붙여넣기 &nbsp;|&nbsp; <b>■ 핸들 드래그</b>로 자동 채우기</p>
+    </div>
+
+    <!-- B-Step 3 -->
+    <div class="card" id="bstep3">
+      <div class="card-header"><div class="card-num">3</div><div class="card-title">배정 실행</div></div>
+      <button class="run-btn" id="bRunBtn" onclick="bRunProcess()">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 9-14 9V3z"/></svg>
+        배정 실행
+      </button>
+      <div id="bRunMsg"></div>
+    </div>
+
+    <!-- B-Step 4 -->
+    <div class="card result-card" id="bstep4">
+      <div class="card-header"><div class="card-num">4</div><div class="card-title">결과</div></div>
+      <div class="tabs">
+        <button class="tab active" onclick="bSwitchTab('byCompany',this)">업체별 배정</button>
+        <button class="tab" onclick="bSwitchTab('allTable',this)">전체 배정표</button>
+        <button class="tab" onclick="bSwitchTab('conflicts',this)">충돌 처리</button>
+      </div>
+      <div class="result-actions">
+        <button class="dl-btn" onclick="bDownloadCSV()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/></svg>
+          CSV 다운로드
+        </button>
+        <button class="dl-btn" id="bZipAllBtn" onclick="bDownloadZipAll()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          업체별 ZIP 일괄 다운로드
+        </button>
+      </div>
+      <div class="tab-pane active" id="bpane-byCompany"><div id="bByCompanyContent"></div></div>
+      <div class="tab-pane" id="bpane-allTable"><div id="bAllTableContent"></div></div>
+      <div class="tab-pane" id="bpane-conflicts"><div id="bConflictsContent"></div></div>
+    </div>
+    </div><!-- /page-banner -->
+
+    <!-- ── 히스토리 탭 ── -->
+    <div class="tab-page" id="page-history">
+    <div class="page-header">
+      <div class="page-title">배정 히스토리</div>
+      <div class="page-sub">배정 실행 기록이 날짜별로 저장됩니다 (최근 7일, 브라우저 로컬 저장)</div>
+    </div>
+    <div class="card">
+      <div class="card-header" style="margin-bottom:.5rem">
+        <div class="card-num">📋</div>
+        <div class="card-title">전체 기록</div>
+        <button class="dl-btn" style="margin-left:auto" onclick="clearHistory()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="13" height="13"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+          기록 전체 삭제
+        </button>
+      </div>
+      <div id="histContent"><div class="hist-empty">아직 배정 기록이 없습니다.</div></div>
+    </div>
+    </div><!-- /page-history -->
+
+  </main>
+</div>
+<div class="copy-toast" id="copyToast"></div>
+<div class="ctx-menu" id="ctxMenu">
+  <div class="ctx-item" onclick="ctxAction('all')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+    전체 복사
+  </div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" onclick="ctxAction('row')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/></svg>
+    이 행 복사
+  </div>
+  <div class="ctx-item" onclick="ctxAction('col')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+    이 열 복사
+  </div>
+  <div class="ctx-item" onclick="ctxAction('cell')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="5" width="14" height="14" rx="1"/></svg>
+    이 셀 복사
+  </div>
+</div>
+
+<script>
+// ── Mode switcher (declared first so sidebar onclick works) ───
+function switchMode(mode) {
+  document.getElementById('page-video').classList.toggle('active', mode === 'video');
+  document.getElementById('page-banner').classList.toggle('active', mode === 'banner');
+  document.getElementById('page-history').classList.toggle('active', mode === 'history');
+  document.getElementById('modeVideo').classList.toggle('active', mode === 'video');
+  document.getElementById('modeBanner').classList.toggle('active', mode === 'banner');
+  document.getElementById('modeHistory').classList.toggle('active', mode === 'history');
+  if (mode === 'history') renderHistory();
+}
+
+// ── State ────────────────────────────────────────────────────
+const motherFiles = [];   // { name, file, videos: [{originalName, blob, thumb}] }
+let assignments = [];
+let conflictLog = [];
+let schedRows = [];
+
+// ── Nav ──────────────────────────────────────────────────────
+function goTo(id) { document.getElementById(id).scrollIntoView({ behavior:'smooth', block:'start' }); }
+
+// ── Drop zone ────────────────────────────────────────────────
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
+fileInput.addEventListener('change', e => { handleFiles(e.target.files); fileInput.value=''; });
+
+function handleFiles(files) {
+  for (const f of files) {
+    if (!f.name.toLowerCase().endsWith('.zip')) continue;
+    if (motherFiles.find(m => m.name === f.name)) continue;
+    motherFiles.push({ name: f.name, file: f, videos: [], allowedDates: '', allowedChannels: '', caption: '' });
+  }
+  renderMotherList();
+}
+
+async function renderMotherList() {
+  const container = document.getElementById('motherList');
+  container.innerHTML = '';
+
+  for (let i = 0; i < motherFiles.length; i++) {
+    const m = motherFiles[i];
+    const card = document.createElement('div');
+    card.className = 'mother-card';
+
+    // Header
+    card.innerHTML = `
+      <div class="mother-card-top">
+        <span class="mother-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:16px;height:16px"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/></svg></span>
+        <span class="mother-name" title="${m.name}">${m.name}</span>
+        <span class="mother-num">마더 ${i+1}</span>
+        <button class="icon-btn" onclick="removeFile(${i})" title="삭제">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="thumb-table-wrap">
+        <table class="thumb-table">
+          <thead><tr><th style="width:36px">#</th><th>영상 파일명</th><th style="width:220px">썸네일 초수</th></tr></thead>
+          <tbody id="thumbBody-${i}">
+            <tr class="loading-row"><td colspan="3">영상 목록 로딩 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="date-lock-wrap">
+        <span class="date-lock-label">📅 지정 날짜</span>
+        <input class="date-lock-input ${m.allowedDates ? 'active' : ''}" type="text"
+          placeholder="미입력 시 모든 날짜 배정 가능 (쉼표 구분: 20250610, 20250611)"
+          value="${m.allowedDates || ''}"
+          oninput="motherFiles[${i}].allowedDates=this.value; this.classList.toggle('active', !!this.value.trim())"
+          id="vdate-${i}">
+      </div>
+      <div class="date-lock-wrap">
+        <span class="date-lock-label">📺 지정 채널</span>
+        <input class="date-lock-input ${m.allowedChannels ? 'active' : ''}" type="text"
+          placeholder="미입력 시 모든 채널 배정 가능 (쉼표 구분: 채널A, 채널B)"
+          value="${m.allowedChannels || ''}"
+          oninput="motherFiles[${i}].allowedChannels=this.value; this.classList.toggle('active', !!this.value.trim())"
+          id="vch-${i}">
+      </div>
+      <div class="caption-wrap">
+        <span class="caption-label">📝 캡션 / 해시태그 <span style="font-size:11px;color:var(--text3);font-weight:400">(입력 시 각 파일링 폴더에 메모장.txt로 첨부됨)</span></span>
+        <textarea class="caption-textarea ${m.caption ? 'has-content' : ''}"
+          placeholder="캡션과 해시태그를 입력하세요. 이 마더기획안의 모든 배정 폴더에 1개씩 포함됩니다."
+          oninput="motherFiles[${i}].caption=this.value; this.classList.toggle('has-content', !!this.value.trim())"
+          id="vcap-${i}">${m.caption || ''}</textarea>
+      </div>`;
+    container.appendChild(card);
+
+    // Load videos async
+    if (m.videos.length === 0) {
+      try {
+        const buf = await m.file.arrayBuffer();
+        const zip = await JSZip.loadAsync(buf);
+        const exts = ['.mp4','.mov','.avi','.mkv','.wmv','.flv','.webm','.m4v'];
+        for (const [name, entry] of Object.entries(zip.files)) {
+          if (entry.dir) continue;
+          if (exts.some(e => name.toLowerCase().endsWith(e))) {
+            m.videos.push({ originalName: name.split('/').pop(), blob: null, zipEntry: entry, thumb: '' });
+          }
+        }
+      } catch(e) {}
+    }
+
+    renderThumbTable(i);
+  }
+}
+
+function renderThumbTable(mi) {
+  const tbody = document.getElementById(`thumbBody-${mi}`);
+  if (!tbody) return;
+  const m = motherFiles[mi];
+  if (m.videos.length === 0) {
+    tbody.innerHTML = '<tr class="loading-row"><td colspan="3" style="color:#e24b4a">ZIP에서 영상 파일을 찾을 수 없습니다.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = '';
+  m.videos.forEach((v, vi) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="width:36px;text-align:center;color:var(--text3);font-size:12px;font-weight:500">${vi+1}</td>
+      <td><span class="vid-name">${v.originalName}</span></td>
+      <td style="width:220px">
+        <div class="thumb-inp-wrap">
+          <input class="thumb-inp" type="number" min="1" placeholder="초 입력"
+            value="${v.thumb}"
+            oninput="motherFiles[${mi}].videos[${vi}].thumb=this.value; updateTag(${mi},${vi},this.value)"
+            id="tinp-${mi}-${vi}" />
+          <span class="sec-label">초</span>
+          <span class="thumb-tag ${v.thumb ? 'filled' : ''}" id="ttag-${mi}-${vi}">${v.thumb ? '[썸네일'+v.thumb+'초]' : '미입력'}</span>
+        </div>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function updateTag(mi, vi, val) {
+  const el = document.getElementById(`ttag-${mi}-${vi}`);
+  if (!el) return;
+  el.textContent = val ? `[썸네일${val}초]` : '미입력';
+  el.className = 'thumb-tag' + (val ? ' filled' : '');
+}
+
+function removeFile(i) {
+  motherFiles.splice(i, 1);
+  renderMotherList();
+}
+
+// ── Schedule table ───────────────────────────────────────────
+for (let i = 0; i < 5; i++) schedRows.push({ date:'', company:'', channel:'' });
+renderSched();
+
+function addRow(date='', company='', channel='') {
+  schedRows.push({ date, company, channel });
+  renderSched();
+  const last = document.getElementById('schedBody').lastElementChild;
+  if (last) last.querySelector('input')?.focus();
+}
+
+function removeRow(i) {
+  schedRows.splice(i, 1);
+  if (schedRows.length === 0) schedRows.push({ date:'', company:'', channel:'' });
+  renderSched();
+}
+
+function renderSched() {
+  const tbody = document.getElementById('schedBody');
+  tbody.innerHTML = '';
+  schedRows.forEach((row, i) => {
+    const tr = document.createElement('tr');
+    tr.dataset.row = i;
+    // helper: build a data cell with fill handle
+    const cell = (col, placeholder, val, key) => `
+      <td data-row="${i}" data-col="${col}">
+        <input type="text" placeholder="${placeholder}" value="${val}"
+          oninput="schedRows[${i}].${key}=this.value"
+          onkeydown="schedKey(event,${i},${col})"
+          onpaste="schedPaste(event,${i},${col})"
+          onfocus="setFocusedCell(${i},${col},'video')"
+          id="sc-${i}-${col}">
+        <div class="fill-handle" data-row="${i}" data-col="${col}" data-scope="video"
+          onmousedown="startFill(event,${i},${col},'video')"></div>
+      </td>`;
+    tr.innerHTML = `
+      <td class="rn">${i+1}</td>
+      ${cell(0,'20250610', row.date,    'date')}
+      ${cell(1,'A업체',    row.company, 'company')}
+      ${cell(2,'채널1',    row.channel, 'channel')}
+      <td class="del"><button class="icon-btn" onclick="removeRow(${i})">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button></td>`;
+    tbody.appendChild(tr);
+  });
+  attachDragSelect();
+}
+
+// ── Drag-select + copy ───────────────────────────────────────
+let dragState = { active: false, startR: -1, startC: -1, endR: -1, endC: -1, scope: 'video' };
+// fillState, focusedCell, colKeys declared in scope-aware section below
+
+function attachDragSelect() {
+  // attach to both tables at once
+  ['schedBody', 'bSchedBody'].forEach(bodyId => {
+    const tbody = document.getElementById(bodyId);
+    if (!tbody) return;
+    const scope = bodyId === 'bSchedBody' ? 'banner' : 'video';
+
+    tbody.addEventListener('mousedown', e => {
+      const td = e.target.closest('td[data-col]');
+      if (!td || e.target.classList.contains('fill-handle')) return;
+      if (e.target.tagName === 'INPUT') return;
+      e.preventDefault();
+      // clear selection on other table
+      clearSel();
+      const r = +td.dataset.row, c = +td.dataset.col;
+      dragState = { active: true, startR: r, startC: c, endR: r, endC: c, scope };
+      updateSelHighlight();
+    });
+
+    tbody.addEventListener('mouseover', e => {
+      if (!dragState.active || dragState.scope !== scope) return;
+      const td = e.target.closest('td[data-col]');
+      if (!td) return;
+      dragState.endR = +td.dataset.row;
+      dragState.endC = +td.dataset.col;
+      updateSelHighlight();
+    });
+  });
+
+  document.addEventListener('mouseup', () => { dragState.active = false; });
+}
+
+function updateSelHighlight() {
+  const bodyId = dragState.scope === 'banner' ? 'bSchedBody' : 'schedBody';
+  const tbody = document.getElementById(bodyId);
+  if (!tbody) return;
+  const { startR, startC, endR, endC } = dragState;
+  const r0 = Math.min(startR, endR), r1 = Math.max(startR, endR);
+  const c0 = Math.min(startC, endC), c1 = Math.max(startC, endC);
+  tbody.querySelectorAll('td[data-col]').forEach(td => {
+    const r = +td.dataset.row, c = +td.dataset.col;
+    td.classList.toggle('sel', r >= r0 && r <= r1 && c >= c0 && c <= c1);
+  });
+}
+
+function clearSel() {
+  document.querySelectorAll('#schedBody td.sel, #bSchedBody td.sel').forEach(td => td.classList.remove('sel'));
+  dragState = { active: false, startR: -1, startC: -1, endR: -1, endC: -1, scope: 'video' };
+}
+
+function selectAll(scope) {
+  clearSel();
+  const rows = scope === 'banner' ? bSchedRows : schedRows;
+  const filled = rows.filter(r => r.date || r.company || r.channel);
+  if (!filled.length) { showToast('입력된 내용이 없어요'); return; }
+  const lastRow = filled.length - 1;
+  dragState = { active: false, startR: 0, startC: 0, endR: lastRow, endC: 2, scope };
+  updateSelHighlight();
+  // auto-copy
+  const text = getSelText();
+  navigator.clipboard.writeText(text).then(() => {
+    showToast(`전체 ${filled.length}행 복사됨`);
+  }).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    showToast(`전체 ${filled.length}행 복사됨`);
+  });
+}
+
+function getSelText() {
+  const { startR, startC, endR, endC, scope } = dragState;
+  if (startR < 0) return '';
+  const rows = scope === 'banner' ? bSchedRows : schedRows;
+  const r0 = Math.min(startR, endR), r1 = Math.max(startR, endR);
+  const c0 = Math.min(startC, endC), c1 = Math.max(startC, endC);
+  const lines = [];
+  for (let r = r0; r <= r1; r++) {
+    const cells = [];
+    for (let c = c0; c <= c1; c++) cells.push(rows[r]?.[colKeys[c]] ?? '');
+    lines.push(cells.join('\t'));
+  }
+  return lines.join('\n');
+}
+
+function showToast(msg) {
+  const t = document.getElementById('copyToast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+// ── Context menu (right-click on schedule cells) ──────────────
+let ctxState = { row: -1, col: -1, scope: 'video' };
+
+function schedRowsFor(scope) { return scope === 'banner' ? bSchedRows : schedRows; }
+
+document.addEventListener('contextmenu', e => {
+  const td = e.target.closest('td[data-col]');
+  if (!td) { document.getElementById('ctxMenu').classList.remove('show'); return; }
+  e.preventDefault();
+  ctxState = { row: +td.dataset.row, col: +td.dataset.col, scope: td.dataset.scope || 'video' };
+  const menu = document.getElementById('ctxMenu');
+  menu.style.left = Math.min(e.clientX, window.innerWidth - 180) + 'px';
+  menu.style.top  = Math.min(e.clientY, window.innerHeight - 160) + 'px';
+  menu.classList.add('show');
+});
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('#ctxMenu')) document.getElementById('ctxMenu').classList.remove('show');
+});
+
+function ctxAction(type) {
+  document.getElementById('ctxMenu').classList.remove('show');
+  const rows = schedRowsFor(ctxState.scope).filter(r => r.date || r.company || r.channel);
+  let text = '';
+  if (type === 'all') {
+    text = rows.map(r => [r.date, r.company, r.channel].join('\t')).join('\n');
+  } else if (type === 'row') {
+    const r = rows[ctxState.row];
+    text = r ? [r.date, r.company, r.channel].join('\t') : '';
+  } else if (type === 'col') {
+    text = rows.map(r => r[colKeys[ctxState.col]] || '').join('\n');
+  } else if (type === 'cell') {
+    const r = rows[ctxState.row];
+    text = r ? (r[colKeys[ctxState.col]] || '') : '';
+  }
+  copyText(text, type);
+}
+
+function copyCol(col, scope) {
+  const rows = schedRowsFor(scope).filter(r => r.date || r.company || r.channel);
+  const text = rows.map(r => r[colKeys[col]] || '').join('\n');
+  const names = ['날짜', '업체명', '채널명'];
+  copyText(text, 'col-header', names[col]);
+}
+
+function copyText(text, type, label='') {
+  if (!text) { showToast('복사할 내용 없음'); return; }
+  const labels = { all:'전체', row:'행', col:'열', cell:'셀', 'col-header':label };
+  navigator.clipboard.writeText(text).then(() => {
+    showToast(`${labels[type]||type} 복사됨`);
+  }).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    showToast(`${labels[type]||type} 복사됨`);
+  });
+}
+
+// ── Fill handle moved to scope-aware version below ────────────
+
+// Ctrl+C copies selected cells; Escape clears
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+    const selTds = document.querySelectorAll('#schedBody td.sel, #bSchedBody td.sel');
+    if (selTds.length === 0) return;
+    e.preventDefault();
+    const text = getSelText();
+    navigator.clipboard.writeText(text).then(() => {
+      showToast(`${selTds.length}개 셀 복사됨`);
+    }).catch(() => {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast(`${selTds.length}개 셀 복사됨`);
+    });
+  }
+  if (e.key === 'Escape') clearSel();
+});
+
+function schedKey(e, row, col) {
+  if (e.key === 'Tab' && col === 2 && !e.shiftKey && row === schedRows.length - 1) {
+    e.preventDefault(); addRow();
+  }
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const next = document.getElementById(`sc-${row+1}-${col}`);
+    if (next) next.focus(); else if (col === 2) addRow();
+  }
+}
+
+function schedPaste(e, startRow, startCol) {
+  const text = (e.clipboardData || window.clipboardData).getData('text');
+  // Single cell paste (no tabs, no newlines) → let browser handle normally
+  if (!text.includes('\t') && !text.includes('\n')) return;
+  e.preventDefault();
+  const colKeys = ['date','company','channel'];
+  const lines = text.trim().split(/\r?\n/).map(l => l.split('\t').map(c => c.trim()));
+  let r = startRow;
+  for (const cells of lines) {
+    while (schedRows.length <= r) schedRows.push({ date:'', company:'', channel:'' });
+    let c = startCol;
+    for (const cell of cells) {
+      if (c < 3) { schedRows[r][colKeys[c]] = cell; c++; }
+    }
+    r++;
+  }
+  renderSched();
+  // focus last pasted cell
+  const lastR = Math.min(r - 1, schedRows.length - 1);
+  document.getElementById(`sc-${lastR}-${Math.min(startCol + (lines[0]?.length || 1) - 1, 2)}`)?.focus();
+}
+
+// ── Process ──────────────────────────────────────────────────
+// Parse date string robustly: handles YYYYMMDD, YYYY-MM-DD, YYYY. M. D, YYYY/M/D etc.
+function parseDate(d) {
+  if (!d) return null;
+  d = String(d).trim();
+  // YYYYMMDD
+  if (/^\d{8}$/.test(d)) return new Date(d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6,8));
+  // YYYY-MM-DD or YYYY/MM/DD
+  if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(d)) return new Date(d.replace(/\//g,'-'));
+  // YYYY. M. D (Excel Korean format)
+  const m = d.match(/^(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.?$/);
+  if (m) return new Date(Number(m[1]), Number(m[2])-1, Number(m[3]));
+  return new Date(d);
+}
+
+function normDate(d) {
+  const dt = parseDate(d);
+  if (!dt || isNaN(dt)) return d;
+  return dt.toISOString().slice(0,10); // YYYY-MM-DD for display
+}
+
+function isConsecutive(d1, d2) {
+  const a = parseDate(d1), b = parseDate(d2);
+  if (!a || !b || isNaN(a) || isNaN(b)) return false;
+  return Math.abs((b - a) / 86400000) === 1;
+}
+
+function setMsg(text, cls='') {
+  const el = document.getElementById('runMsg');
+  const icons = {
+    ok: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>',
+    error: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
+    warn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/></svg>',
+  };
+  el.innerHTML = text ? `<div class="msg ${cls}">${icons[cls]||''}${text}</div>` : '';
+}
+
+async function runProcess() {
+  conflictLog = []; assignments = [];
+  setMsg('');
+
+  const sched = schedRows.filter(r => r.date && r.company && r.channel);
+  if (sched.length === 0) { setMsg('스케줄을 1행 이상 입력해주세요.', 'error'); return; }
+  if (motherFiles.length === 0) { setMsg('마더파일을 업로드해주세요.', 'error'); return; }
+
+  // Validate all video thumbs filled
+  for (let i = 0; i < motherFiles.length; i++) {
+    const m = motherFiles[i];
+    if (m.videos.length === 0) { setMsg(`마더 ${i+1} ("${m.name}")의 영상 목록이 아직 로딩 중입니다. 잠시 후 다시 시도해주세요.`, 'error'); return; }
+    for (let vi = 0; vi < m.videos.length; vi++) {
+      if (!m.videos[vi].thumb) {
+        setMsg(`마더 ${i+1} — "${m.videos[vi].originalName}" 의 썸네일 초수를 입력해주세요.`, 'error');
+        document.getElementById(`tinp-${i}-${vi}`)?.focus();
+        return;
+      }
+    }
+  }
+
+  const btn = document.getElementById('runBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> 처리 중...';
+
+  try {
+    // Load blobs for all videos
+    const motherData = [];
+    for (const m of motherFiles) {
+      const videos = [];
+      for (const v of m.videos) {
+        let blob = v.blob;
+        if (!blob) blob = await v.zipEntry.async('blob');
+        videos.push({ originalName: v.originalName, blob, thumb: v.thumb });
+      }
+      motherData.push({ name: m.name, videos });
+    }
+
+    // Check total video count vs schedule count
+    const totalVideos = motherData.reduce((s, m) => s + m.videos.length, 0);
+    if (totalVideos < sched.length) {
+      setMsg(`영상 소재가 부족합니다. 스케줄 ${sched.length}개 / 전체 영상 ${totalVideos}개 — 마더파일을 추가하거나 스케줄을 줄여주세요.`, 'error');
+      btn.disabled = false;
+      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 9-14 9V3z"/></svg> 배정 실행';
+      return;
+    }
+
+    // Interleave videos across mothers: m0v0, m1v0, m0v1, m1v1, ...
+    // allowedDates가 설정된 마더는 해당 날짜 스케줄에만 배정
+    const flatPool = [];
+    const maxVids = Math.max(...motherData.map(m => m.videos.length));
+    for (let vi = 0; vi < maxVids; vi++) {
+      for (let mi = 0; mi < motherData.length; mi++) {
+        if (vi < motherData[mi].videos.length) {
+          const allowedRaw = motherFiles[mi]?.allowedDates || '';
+          const allowedDates = allowedRaw.trim()
+            ? allowedRaw.split(',').map(d => normDate(d.trim())).filter(Boolean)
+            : null; // null = 제한 없음
+          const allowedChRaw = motherFiles[mi]?.allowedChannels || '';
+          const allowedChannels = allowedChRaw.trim()
+            ? allowedChRaw.split(',').map(c => c.trim()).filter(Boolean)
+            : null;
+          const caption = motherFiles[mi]?.caption || '';
+          flatPool.push({ motherIdx: mi, motherName: motherData[mi].name, allowedDates, allowedChannels, caption, ...motherData[mi].videos[vi] });
+        }
+      }
+    }
+
+    // Assign videos — each video used exactly once
+    // For consecutive same-channel days: pick video from different mother
+    // date-lock: skip videos whose allowedDates doesn't include the sched date
+    const used = new Set();
+    const poolAssignments = [];
+
+    for (let si = 0; si < sched.length; si++) {
+      const s = sched[si];
+      const schedDateNorm = normDate(s.date);
+
+      // Find the most recent previous assignment on the same channel+company that is consecutive in date
+      let prevAssign = null;
+      for (let pi = poolAssignments.length - 1; pi >= 0; pi--) {
+        const a = poolAssignments[pi];
+        if (a.s.channel === s.channel && a.s.company === s.company && isConsecutive(a.s.date, s.date)) {
+          prevAssign = a; break;
+        }
+      }
+      const forbiddenMother = prevAssign ? prevAssign.entry.motherIdx : -1;
+
+      // 1st pass: date-lock 준수 + 채널 lock 준수 + 다른 마더
+      let picked = null;
+      for (let pi = 0; pi < flatPool.length; pi++) {
+        if (used.has(pi)) continue;
+        const entry = flatPool[pi];
+        // date-lock 체크
+        if (entry.allowedDates && !entry.allowedDates.includes(schedDateNorm)) continue;
+        // channel-lock 체크
+        if (entry.allowedChannels && !entry.allowedChannels.includes(s.channel)) continue;
+        if (entry.motherIdx === forbiddenMother) continue;
+        picked = { pi, entry };
+        break;
+      }
+
+      // 2nd pass: date-lock 준수 + 채널 lock 준수 + 같은 마더 허용
+      if (!picked) {
+        for (let pi = 0; pi < flatPool.length; pi++) {
+          if (used.has(pi)) continue;
+          const entry = flatPool[pi];
+          if (entry.allowedDates && !entry.allowedDates.includes(schedDateNorm)) continue;
+          if (entry.allowedChannels && !entry.allowedChannels.includes(s.channel)) continue;
+          picked = { pi, entry };
+          break;
+        }
+      }
+
+      // 3rd pass: date-lock 무시 (소재 부족 fallback)
+      let forced = false;
+      if (!picked) {
+        for (let pi = 0; pi < flatPool.length; pi++) {
+          if (used.has(pi)) continue;
+          picked = { pi, entry: flatPool[pi] };
+          forced = true;
+          break;
+        }
+      }
+
+      if (!picked) {
+        setMsg(`스케줄 ${si+1}번째 행(${s.date} / ${s.company} / ${s.channel})에 배정할 수 있는 영상이 없습니다. 지정 날짜 조건을 확인해주세요.`, 'error');
+        btn.disabled = false; btn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 9-14 9V3z"/></svg> 배정 실행';
+        return;
+      }
+
+      // Log conflict whenever there was a consecutive constraint
+      if (prevAssign) {
+        conflictLog.push({
+          company: s.company, channel: s.channel,
+          date: s.date, prevDate: prevAssign.s.date,
+          prevMother: motherData[forbiddenMother].name,
+          newMother: motherData[picked.entry.motherIdx].name,
+          forced
+        });
+      }
+
+      used.add(picked.pi);
+      poolAssignments.push({ s, entry: picked.entry, pi: picked.pi });
+
+      const vid = picked.entry;
+      assignments.push({
+        company: s.company, date: s.date, channel: s.channel,
+        motherName: vid.motherName, thumb: vid.thumb,
+        folderName: `${s.date}_${s.channel}_썸네일${vid.thumb}초`,
+        fileName: vid.originalName,
+        blob: vid.blob,
+        caption: vid.caption || ''
+      });
+    }
+
+    // 잉여 소재 기록 (사용되지 않은 pool 항목)
+    const unusedVideos = flatPool.filter((_, pi) => !used.has(pi));
+    if (unusedVideos.length) {
+      conflictLog.push({ type: 'unused_surplus', items: unusedVideos.map(v => ({ motherName: v.motherName, fileName: v.originalName })) });
+    }
+
+    saveHistory('video', assignments.map(a => ({ date: a.date, company: a.company, channel: a.channel, motherName: a.motherName, fileName: a.fileName })));
+    renderResults();
+    document.getElementById('step4').classList.add('visible');
+    setMsg(`${assignments.length}개 소재 배정 완료!`, 'ok');
+    setTimeout(() => goTo('step4'), 300);
+    ['dot1','dot2','dot3'].forEach(id => { document.getElementById(id).textContent = '✓'; });
+    document.getElementById('nav4').classList.add('active');
+
+  } catch(e) {
+    setMsg('오류: ' + e.message, 'error');
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 9-14 9V3z"/></svg> 배정 실행';
+}
+
+// ── Render results ───────────────────────────────────────────
+function renderResults() {
+  const companies = [...new Set(assignments.map(a => a.company))];
+
+  // By company
+  let h = '';
+  for (const co of companies) {
+    const items = assignments.filter(a => a.company === co);
+    h += `<div class="company-block">
+      <div class="company-label">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg>
+        ${co} <span class="company-count">${items.length}개 소재</span>
+        <button class="dl-btn co-dl" onclick="downloadCompanyZip('${co}')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="13" height="13"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg> ZIP
+        </button>
+      </div>
+      <div class="result-scroll">
+      <table class="data-table"><thead><tr><th style="width:100px">날짜</th><th style="width:110px">채널</th><th>폴더명</th><th>파일명</th></tr></thead><tbody>`;
+    for (const a of items) {
+      h += `<tr>
+        <td class="nowrap">${a.date}</td>
+        <td class="nowrap">${a.channel}</td>
+        <td class="mono">${a.folderName}</td>
+        <td class="mono">${a.fileName}</td>
+      </tr>`;
+    }
+    h += '</tbody></table></div></div>';
+  }
+  document.getElementById('byCompanyContent').innerHTML = h;
+
+  // All table
+  let h2 = '<div class="result-scroll"><table class="data-table"><thead><tr><th style="width:100px">날짜</th><th style="width:90px">업체</th><th style="width:110px">채널</th><th style="width:140px">마더파일</th><th>파일명</th></tr></thead><tbody>';
+  for (const a of assignments) {
+    h2 += `<tr>
+      <td class="nowrap">${a.date}</td>
+      <td class="nowrap company-cell">${a.company}</td>
+      <td class="nowrap">${a.channel}</td>
+      <td style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px" title="${a.motherName}">${a.motherName}</td>
+      <td class="mono">${a.fileName}</td>
+    </tr>`;
+  }
+  h2 += '</tbody></table></div>';
+  document.getElementById('allTableContent').innerHTML = h2;
+
+  // Conflicts
+  const surplusLog = conflictLog.filter(c => c.type === 'unused_surplus');
+  const consecLog = conflictLog.filter(c => c.type !== 'unused_surplus');
+  if (!consecLog.length && !surplusLog.length) {
+    document.getElementById('conflictsContent').innerHTML = '<p style="font-size:13px;color:var(--text3);padding:.5rem 0">연달은 날짜 충돌 없음 — 모든 배정이 정상 처리됐습니다.</p>';
+  } else {
+    const forced = consecLog.filter(c => c.forced);
+    const swapped = consecLog.filter(c => !c.forced && c.type !== 'unused_surplus');
+    let h3 = '';
+    if (consecLog.length) {
+      h3 += `<div class="msg warn" style="margin-bottom:.75rem">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:15px;height:15px;flex-shrink:0"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/></svg>
+        연달은 날짜 처리 ${consecLog.length}건 — 교체 성공 ${swapped.length}건${forced.length > 0 ? ` / 대체 불가(동일 마더 불가피) ${forced.length}건` : ''}</div>`;
+      for (const c of consecLog) {
+        const tag = c.forced
+          ? `<span style="font-size:11px;background:#FCEBEB;color:#A32D2D;border-radius:4px;padding:1px 6px;margin-left:6px">대체 영상 부족 — 동일 마더 사용됨</span>`
+          : `<span style="font-size:11px;background:#EAF3DE;color:#3B6D11;border-radius:4px;padding:1px 6px;margin-left:6px">다른 마더로 교체 완료</span>`;
+        h3 += `<div class="conflict-row">
+          <b>${c.company}</b> / <b>${c.channel}</b> &nbsp;—&nbsp; ${c.prevDate} → ${c.date} 연달아 배정<br>
+          <span style="font-size:12px">이전 마더: <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">${c.prevMother}</code> &nbsp;→&nbsp; 배정 마더: <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">${c.newMother}</code></span>${tag}
+        </div>`;
+      }
+    }
+    if (surplusLog.length) {
+      const items = surplusLog.flatMap(s => s.items);
+      h3 += `<div class="msg warn" style="margin-bottom:.75rem;margin-top:${consecLog.length?'.75rem':'0'}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:15px;height:15px;flex-shrink:0"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+        잉여 소재 ${items.length}건 — 스케줄 수 초과로 배정되지 않음</div>`;
+      for (const it of items) {
+        h3 += `<div class="conflict-row">마더: <b>${it.motherName}</b> &nbsp;/&nbsp; 영상: <span style="font-family:'Courier New',monospace;font-size:11px">${it.fileName}</span></div>`;
+      }
+    }
+    document.getElementById('conflictsContent').innerHTML = h3;
+  }
+}
+
+function switchTab(id, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('pane-'+id).classList.add('active');
+}
+
+// ── Downloads ────────────────────────────────────────────────
+function downloadCSV() {
+  const rows = [['날짜','업체','채널','마더파일','파일명']];
+  for (const a of assignments) rows.push([a.date, a.company, a.channel, a.motherName, a.fileName]);
+  const csv = '\uFEFF' + rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+  dlBlob(new Blob([csv], { type:'text/csv;charset=utf-8' }), '배정표.csv');
+}
+
+async function downloadCompanyZip(co) {
+  const btn = event?.target?.closest('button');
+  if (btn) { btn.disabled = true; btn.textContent = '생성 중...'; }
+  try {
+    const zip = new JSZip();
+    for (const a of assignments.filter(x => x.company === co)) {
+      const folder = zip.folder(a.folderName);
+      folder.file(a.fileName, a.blob);
+      if (a.caption) folder.file('캡션_해시태그.txt', new Blob([a.caption], { type:'text/plain;charset=utf-8' }));
+    }
+    dlBlob(await zip.generateAsync({ type:'blob' }), `${co}.zip`);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="13" height="13"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg> ZIP'; }
+  }
+}
+
+async function downloadZipAll() {
+  const companies = [...new Set(assignments.map(a => a.company))];
+  const dlBtn = document.querySelector('[onclick="downloadZipAll()"]');
+  if (dlBtn) { dlBtn.disabled = true; dlBtn.textContent = 'ZIP 생성 중...'; }
+
+  const outerZip = new JSZip();
+  for (const co of companies) {
+    const innerZip = new JSZip();
+    for (const a of assignments.filter(x => x.company === co)) {
+      const folder = innerZip.folder(a.folderName);
+      folder.file(a.fileName, a.blob);
+      if (a.caption) folder.file('캡션_해시태그.txt', new Blob([a.caption], { type:'text/plain;charset=utf-8' }));
+    }
+    const innerBlob = await innerZip.generateAsync({ type:'uint8array' });
+    outerZip.file(`${co}.zip`, innerBlob);
+  }
+  dlBlob(await outerZip.generateAsync({ type:'blob' }), '전체_영상배정.zip');
+
+  if (dlBtn) {
+    dlBtn.disabled = false;
+    dlBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="14" height="14"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg> 업체별 ZIP 일괄 다운로드';
+    showToast(`${companies.length}개 업체 ZIP 다운로드 완료`);
+  }
+}
+
+function dlBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 3000);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ── BANNER MODULE ─────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+
+const bMotherFiles = [];
+let bAssignments  = [];
+let bConflictLog  = [];
+let bSchedRows    = [];
+
+const ORIGINAL_PRIORITY = ['동후작가', '굿띵투유'];
+const IMG_EXTS = ['.jpg','.jpeg','.png','.gif','.webp','.bmp','.tiff','.tif'];
+
+const bDropZone = document.getElementById('bDropZone');
+const bFileInput = document.getElementById('bFileInput');
+bDropZone.addEventListener('dragover', e => { e.preventDefault(); bDropZone.classList.add('dragover'); });
+bDropZone.addEventListener('dragleave', () => bDropZone.classList.remove('dragover'));
+bDropZone.addEventListener('drop', e => { e.preventDefault(); bDropZone.classList.remove('dragover'); bHandleFiles(e.dataTransfer.files); });
+bFileInput.addEventListener('change', e => { bHandleFiles(e.target.files); bFileInput.value=''; });
+
+function bHandleFiles(files) {
+  for (const f of files) {
+    if (!f.name.toLowerCase().endsWith('.zip')) continue;
+    if (bMotherFiles.find(m => m.name === f.name)) continue;
+    bMotherFiles.push({ name: f.name, file: f, covers: [], inners: [], allowedDates: '', allowedChannels: '', caption: '' });
+  }
+  bRenderMotherList();
+}
+
+async function bRenderMotherList() {
+  const container = document.getElementById('bMotherList');
+  container.innerHTML = '';
+  for (let i = 0; i < bMotherFiles.length; i++) {
+    const m = bMotherFiles[i];
+    if (m.covers.length === 0 && m.inners.length === 0) {
+      try {
+        const buf = await m.file.arrayBuffer();
+        const zip = await JSZip.loadAsync(buf);
+        for (const [path, entry] of Object.entries(zip.files)) {
+          if (entry.dir) continue;
+          if (!IMG_EXTS.some(e => path.toLowerCase().endsWith(e))) continue;
+          const baseName = path.split('/').pop();
+          const lc = baseName.toLowerCase();
+          if (lc.includes('표지')) m.covers.push({ name: baseName, blob: null, entry, isOriginal: lc.includes('원본'), pinned: false });
+          else if (lc.includes('속지')) m.inners.push({ name: baseName, blob: null, entry });
+        }
+      } catch(e) {}
+    }
+
+    const pinnedCount = m.covers.filter(c => c.pinned).length;
+    const innerChips = m.inners.map(c => `<span class="cover-chip inner">${c.name}</span>`).join('');
+
+    const card = document.createElement('div');
+    card.className = 'mother-card';
+    card.innerHTML = `
+      <div class="mother-card-top">
+        <span class="mother-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:16px;height:16px"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/></svg></span>
+        <span class="mother-name" title="${m.name}">${m.name}</span>
+        <span class="mother-num">마더 ${i+1}</span>
+        <button class="icon-btn" onclick="bRemoveFile(${i})">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="thumb-table-wrap" style="padding:.65rem 1rem;">
+        <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;display:flex;align-items:center;gap:6px">
+          표지 ${m.covers.length}개
+          &nbsp;<span style="color:var(--warn-text)">🔒 원본 ${m.covers.filter(c=>c.isOriginal).length}개</span>
+          ${pinnedCount > 0 ? `<span class="pinned-count">📌 필수 ${pinnedCount}개 선택됨</span>` : ''}
+          <span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:auto">체크 = 필수 배정</span>
+        </div>
+        <div class="cover-check-list" id="coverList-${i}">
+          ${m.covers.map((c, ci) => `
+            <div class="cover-check-row ${c.pinned ? 'is-pinned' : ''} ${c.isOriginal ? 'is-original' : ''}" onclick="togglePin(${i},${ci})">
+              <input type="checkbox" id="pin-${i}-${ci}" ${c.pinned ? 'checked' : ''} onclick="event.stopPropagation();togglePin(${i},${ci})">
+              <label for="pin-${i}-${ci}">${c.isOriginal ? '🔒 ' : ''}${c.name}</label>
+              ${c.pinned ? '<span style="font-size:10px;color:#7E22CE;background:#FDE8FF;border-radius:3px;padding:1px 5px">📌 필수</span>' : ''}
+            </div>`).join('')}
+        </div>
+        <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin:10px 0 5px">속지(필수세트) ${m.inners.length}개</div>
+        <div>${innerChips || '<span style="font-size:12px;color:var(--text3)">속지 파일 없음</span>'}</div>
+      </div>
+      <div class="date-lock-wrap">
+        <span class="date-lock-label">📅 지정 날짜</span>
+        <input class="date-lock-input ${m.allowedDates ? 'active' : ''}" type="text"
+          placeholder="미입력 시 모든 날짜 배정 가능 (여러 날짜는 쉼표로 구분: 20250610, 20250611)"
+          value="${m.allowedDates || ''}"
+          oninput="bMotherFiles[${i}].allowedDates=this.value; this.classList.toggle('active', !!this.value.trim())"
+          id="bdate-${i}">
+      </div>
+      <div class="date-lock-wrap">
+        <span class="date-lock-label">📺 지정 채널</span>
+        <input class="date-lock-input ${m.allowedChannels ? 'active' : ''}" type="text"
+          placeholder="미입력 시 모든 채널 배정 가능 (쉼표 구분: 채널A, 채널B)"
+          value="${m.allowedChannels || ''}"
+          oninput="bMotherFiles[${i}].allowedChannels=this.value; this.classList.toggle('active', !!this.value.trim())"
+          id="bch-${i}">
+      </div>
+      <div class="caption-wrap">
+        <span class="caption-label">📝 캡션 / 해시태그 <span style="font-size:11px;color:var(--text3);font-weight:400">(입력 시 각 파일링 폴더에 메모장.txt로 첨부됨)</span></span>
+        <textarea class="caption-textarea ${m.caption ? 'has-content' : ''}"
+          placeholder="캡션과 해시태그를 입력하세요. 이 마더기획안의 모든 배정 폴더에 1개씩 포함됩니다."
+          oninput="bMotherFiles[${i}].caption=this.value; this.classList.toggle('has-content', !!this.value.trim())"
+          id="bcap-${i}">${m.caption || ''}</textarea>
+      </div>`;
+    container.appendChild(card);
+  }
+}
+
+function togglePin(mi, ci) {
+  const cover = bMotherFiles[mi].covers[ci];
+  cover.pinned = !cover.pinned;
+  // re-render just this card's cover list
+  bRenderMotherList();
+}
+
+// Schedule
+for (let i = 0; i < 5; i++) bSchedRows.push({ date:'', company:'', channel:'' });
+bRenderSched();
+
+function bAddRow(date='', company='', channel='') {
+  bSchedRows.push({ date, company, channel });
+  bRenderSched();
+  document.getElementById('bSchedBody').lastElementChild?.querySelector('input')?.focus();
+}
+
+function bRemoveRow(i) {
+  bSchedRows.splice(i, 1);
+  if (bSchedRows.length === 0) bSchedRows.push({ date:'', company:'', channel:'' });
+  bRenderSched();
+}
+
+function bRenderSched() {
+  const tbody = document.getElementById('bSchedBody');
+  tbody.innerHTML = '';
+  bSchedRows.forEach((row, i) => {
+    const tr = document.createElement('tr');
+    tr.dataset.row = i;
+    const cell = (col, ph, val, key) => `
+      <td data-row="${i}" data-col="${col}" data-scope="banner">
+        <input type="text" placeholder="${ph}" value="${val}"
+          oninput="bSchedRows[${i}].${key}=this.value"
+          onkeydown="bSchedKey(event,${i},${col})"
+          onpaste="bSchedPaste(event,${i},${col})"
+          onfocus="setFocusedCell(${i},${col},'banner')"
+          id="bsc-${i}-${col}">
+        <div class="fill-handle" data-row="${i}" data-col="${col}" data-scope="banner"
+          onmousedown="startFill(event,${i},${col},'banner')"></div>
+      </td>`;
+    tr.innerHTML = `<td class="rn">${i+1}</td>${cell(0,'20250610',row.date,'date')}${cell(1,'A업체',row.company,'company')}${cell(2,'채널1',row.channel,'channel')}
+      <td class="del"><button class="icon-btn" onclick="bRemoveRow(${i})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></td>`;
+    tbody.appendChild(tr);
+  });
+  attachDragSelect();
+}
+
+function bSchedKey(e, row, col) {
+  if (e.key === 'Tab' && col === 2 && !e.shiftKey && row === bSchedRows.length-1) { e.preventDefault(); bAddRow(); }
+  if (e.key === 'Enter') { e.preventDefault(); document.getElementById(`bsc-${row+1}-${col}`)?.focus() || (col===2 && bAddRow()); }
+}
+
+function bSchedPaste(e, startRow, startCol) {
+  const text = (e.clipboardData || window.clipboardData).getData('text');
+  if (!text.includes('\t') && !text.includes('\n')) return;
+  e.preventDefault();
+  const ckeys = ['date','company','channel'];
+  const lines = text.trim().split(/\r?\n/).map(l => l.split('\t').map(c => c.trim()));
+  let r = startRow;
+  for (const cells of lines) {
+    while (bSchedRows.length <= r) bSchedRows.push({ date:'', company:'', channel:'' });
+    let c = startCol;
+    for (const cell of cells) { if (c < 3) { bSchedRows[r][ckeys[c]] = cell; c++; } }
+    r++;
+  }
+  bRenderSched();
+}
+
+function bSetMsg(text, cls='') {
+  const icons = { ok:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>', error:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/></svg>', warn:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>' };
+  document.getElementById('bRunMsg').innerHTML = text ? `<div class="msg ${cls}">${icons[cls]||''}${text}</div>` : '';
+}
+
+async function bRunProcess() {
+  bAssignments = []; bConflictLog = [];
+  bSetMsg('');
+  const sched = bSchedRows.filter(r => r.date && r.company && r.channel);
+  if (!sched.length) { bSetMsg('스케줄을 1행 이상 입력해주세요.', 'error'); return; }
+  if (!bMotherFiles.length) { bSetMsg('마더파일을 업로드해주세요.', 'error'); return; }
+
+  const btn = document.getElementById('bRunBtn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> 처리 중...';
+
+  try {
+    // Load blobs
+    const motherData = [];
+    for (const m of bMotherFiles) {
+      const covers = [], inners = [];
+      for (const c of m.covers) covers.push({ name: c.name, blob: await c.entry.async('blob'), isOriginal: c.isOriginal });
+      for (const c of m.inners) inners.push({ name: c.name, blob: await c.entry.async('blob') });
+      if (!covers.length) { bSetMsg(`"${m.name}"에 표지 파일("표지" 키워드)이 없습니다.`, 'error'); btn.disabled=false; btn.innerHTML='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 9-14 9V3z"/></svg> 배정 실행'; return; }
+      if (!inners.length) { bSetMsg(`"${m.name}"에 속지 파일("속지" 키워드)이 없습니다.`, 'error'); btn.disabled=false; btn.innerHTML='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 9-14 9V3z"/></svg> 배정 실행'; return; }
+      motherData.push({ name: m.name, covers, inners });
+    }
+
+    // Build cover pools (interleave across mothers)
+    // 각 엔트리에 allowedDates(정규화된 날짜 배열 또는 null) 포함
+    const pinnedCovers = [], normalCovers = [], originalCovers = [];
+    const maxC = Math.max(...motherData.map(m => m.covers.length));
+    for (let vi = 0; vi < maxC; vi++) {
+      for (let mi = 0; mi < motherData.length; mi++) {
+        const srcCover = bMotherFiles[mi]?.covers[vi];
+        const c = motherData[mi].covers[vi];
+        if (!c) continue;
+        // 지정 날짜 파싱: 미입력이면 null(모든 날짜 허용), 입력 시 정규화된 배열
+        const rawDates = bMotherFiles[mi]?.allowedDates || '';
+        const allowedDates = rawDates.trim()
+          ? rawDates.split(',').map(d => normDate(d.trim())).filter(Boolean)
+          : null;
+        const rawCh = bMotherFiles[mi]?.allowedChannels || '';
+        const allowedChannels = rawCh.trim() ? rawCh.split(',').map(c => c.trim()).filter(Boolean) : null;
+        const caption = bMotherFiles[mi]?.caption || '';
+        const entry = { ...c, motherIdx: mi, motherName: motherData[mi].name, inners: motherData[mi].inners, allowedDates, allowedChannels, caption };
+        if (srcCover?.pinned) pinnedCovers.push(entry);
+        else if (c.isOriginal) originalCovers.push(entry);
+        else normalCovers.push(entry);
+      }
+    }
+
+    // 스케줄 중복 행 체크 (같은 날짜+업체+채널 조합)
+    const schedKeys = sched.map(s => `${normDate(s.date)}|${s.company}|${s.channel}`);
+    const dupKey = schedKeys.find((k, i) => schedKeys.indexOf(k) !== i);
+    if (dupKey) {
+      const [d, co, ch] = dupKey.split('|');
+      bSetMsg(`스케줄에 중복 행이 있습니다: ${d} / ${co} / ${ch} — 중복 행을 제거해주세요.`, 'error');
+      btn.disabled=false; btn.innerHTML='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 9-14 9V3z"/></svg> 배정 실행'; return;
+    }
+
+    // 필수 표지 수 체크
+    const totalCovers = pinnedCovers.length + normalCovers.length + originalCovers.length;
+    if (totalCovers < sched.length) { bSetMsg(`표지 소재 부족: 스케줄 ${sched.length}개 / 전체 표지 ${totalCovers}개`, 'error'); btn.disabled=false; btn.innerHTML='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 9-14 9V3z"/></svg> 배정 실행'; return; }
+    if (pinnedCovers.length > sched.length) { bSetMsg(`필수 표지(${pinnedCovers.length}개)가 스케줄(${sched.length}개)보다 많습니다. 스케줄을 늘려주세요.`, 'error'); btn.disabled=false; btn.innerHTML='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 9-14 9V3z"/></svg> 배정 실행'; return; }
+    // 잉여 표지는 배정하지 않음 — normalCovers를 남은 슬롯 수로 제한
+    const availableNormal = sched.length - pinnedCovers.length;
+    if (normalCovers.length > availableNormal) normalCovers.splice(availableNormal);
+
+    // 날짜/채널 허용 여부 체크 헬퍼
+    function bDateAllowed(entry, dateNorm, channel) {
+      if (entry.allowedDates && !entry.allowedDates.includes(dateNorm)) return false;
+      if (entry.allowedChannels && !entry.allowedChannels.includes(channel)) return false;
+      return true;
+    }
+
+    // Assignment 순서:
+    // 1) 필수(pinned) 표지 → 앞 N개 스케줄 행에 우선 배정 (날짜 lock 준수)
+    // 2) 나머지 행 → 일반 표지 → 부족 시 원본 순 (날짜 lock 준수)
+    // 3) 날짜 lock 소재가 없을 때 fallback: lock 무시하고 배정 (warn 기록)
+    const schedIdx = sched.map((s, i) => ({ s, i }));
+    const priorityRows = schedIdx.filter(x => ORIGINAL_PRIORITY.includes(x.s.company))
+      .sort((a, b) => ORIGINAL_PRIORITY.indexOf(a.s.company) - ORIGINAL_PRIORITY.indexOf(b.s.company));
+    const normalRows = schedIdx.filter(x => !ORIGINAL_PRIORITY.includes(x.s.company));
+    const ordered = [...normalRows, ...priorityRows];
+
+    const usedP = new Set(), usedN = new Set(), usedO = new Set();
+    const tempAssign = new Array(sched.length);
+
+    // 날짜/채널 필터를 적용해 풀에서 미사용 첫 번째 항목 찾기
+    function pickFrom(pool, usedSet, dateNorm, channel, ignoreLock = false) {
+      for (let idx = 0; idx < pool.length; idx++) {
+        if (usedSet.has(idx)) continue;
+        if (!ignoreLock && !bDateAllowed(pool[idx], dateNorm, channel)) continue;
+        return idx;
+      }
+      return -1;
+    }
+
+    for (const { s, i } of ordered) {
+      const schedDateNorm = normDate(s.date);
+      let cover = null;
+
+      // 1) 필수(pinned) 표지 — 날짜/채널 lock 준수
+      let idx = pickFrom(pinnedCovers, usedP, schedDateNorm, s.channel);
+      if (idx >= 0) {
+        cover = { ...pinnedCovers[idx], isOriginalUsed: false, isPinned: true };
+        usedP.add(idx);
+      }
+
+      // 2) 일반 표지 — 날짜/채널 lock 준수
+      if (!cover) {
+        idx = pickFrom(normalCovers, usedN, schedDateNorm, s.channel);
+        if (idx >= 0) {
+          cover = { ...normalCovers[idx], isOriginalUsed: false, isPinned: false };
+          usedN.add(idx);
+        }
+      }
+
+      // 3) 원본 표지 — 날짜/채널 lock 준수
+      if (!cover) {
+        idx = pickFrom(originalCovers, usedO, schedDateNorm, s.channel);
+        if (idx >= 0) {
+          cover = { ...originalCovers[idx], isOriginalUsed: true, isPinned: false };
+          bConflictLog.push({ type:'original_used', company:s.company, channel:s.channel, date:s.date, coverName:originalCovers[idx].name });
+          usedO.add(idx);
+        }
+      }
+
+      // 4) Fallback: 날짜/채널 lock 무시하고 pinned → normal → original 순으로 재시도
+      if (!cover) {
+        idx = pickFrom(pinnedCovers, usedP, schedDateNorm, s.channel, true);
+        if (idx >= 0) { cover = { ...pinnedCovers[idx], isOriginalUsed: false, isPinned: true, dateLockIgnored: true }; usedP.add(idx); }
+      }
+      if (!cover) {
+        idx = pickFrom(normalCovers, usedN, schedDateNorm, s.channel, true);
+        if (idx >= 0) { cover = { ...normalCovers[idx], isOriginalUsed: false, isPinned: false, dateLockIgnored: true }; usedN.add(idx); }
+      }
+      if (!cover) {
+        idx = pickFrom(originalCovers, usedO, schedDateNorm, s.channel, true);
+        if (idx >= 0) {
+          cover = { ...originalCovers[idx], isOriginalUsed: true, isPinned: false, dateLockIgnored: true };
+          bConflictLog.push({ type:'original_used', company:s.company, channel:s.channel, date:s.date, coverName:originalCovers[idx].name });
+          usedO.add(idx);
+        }
+      }
+
+      if (!cover) { bSetMsg('표지 소재가 부족합니다.', 'error'); btn.disabled=false; btn.innerHTML='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 9-14 9V3z"/></svg> 배정 실행'; return; }
+
+      // 날짜 lock 무시 fallback 발생 시 경고 기록
+      if (cover.dateLockIgnored) {
+        bConflictLog.push({ type:'date_lock_ignored', company:s.company, channel:s.channel, date:s.date, coverName:cover.name, motherName:cover.motherName });
+      }
+
+      tempAssign[i] = { s, cover };
+    }
+
+    // 잉여 표지 기록 (모든 pool 합산 후 미사용 항목)
+    const allPoolEntries = [
+      ...pinnedCovers.map((e, idx) => ({ ...e, poolType: 'pinned', poolIdx: idx, usedSet: usedP })),
+      ...normalCovers.map((e, idx) => ({ ...e, poolType: 'normal', poolIdx: idx, usedSet: usedN })),
+      ...originalCovers.map((e, idx) => ({ ...e, poolType: 'original', poolIdx: idx, usedSet: usedO }))
+    ];
+    const surplusCovers = allPoolEntries.filter(e => !e.usedSet.has(e.poolIdx));
+    if (surplusCovers.length) {
+      bConflictLog.push({ type: 'unused_surplus', items: surplusCovers.map(e => ({ motherName: e.motherName, coverName: e.name })) });
+    }
+
+    for (let i = 0; i < sched.length; i++) {
+      const { s, cover } = tempAssign[i];
+      bAssignments.push({
+        company: s.company, date: s.date, channel: s.channel,
+        motherName: cover.motherName,
+        folderName: `${s.date}_${s.company}_${s.channel}`,
+        coverName: cover.name, coverBlob: cover.blob,
+        inners: cover.inners, isOriginalUsed: cover.isOriginalUsed,
+        isPinned: cover.isPinned,
+        caption: cover.caption || ''
+      });
+    }
+
+    saveHistory('banner', bAssignments.map(a => ({ date: a.date, company: a.company, channel: a.channel, motherName: a.motherName, coverName: a.coverName })));
+
+    bRenderResults();
+    document.getElementById('bstep4').classList.add('visible');
+    bSetMsg(`${bAssignments.length}개 채널 배정 완료!`, 'ok');
+    setTimeout(() => document.getElementById('bstep4').scrollIntoView({ behavior:'smooth', block:'start' }), 300);
+
+  } catch(e) { bSetMsg('오류: ' + e.message, 'error'); }
+  btn.disabled=false; btn.innerHTML='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 9-14 9V3z"/></svg> 배정 실행';
+}
+
+function bRenderResults() {
+  const companies = [...new Set(bAssignments.map(a => a.company))];
+  let h = '';
+  for (const co of companies) {
+    const items = bAssignments.filter(a => a.company === co);
+    h += `<div class="company-block"><div class="company-label">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg>
+      📁 ${co}.zip <span class="company-count">${items.length}개 채널 폴더</span>
+      <button class="dl-btn co-dl" onclick="bDownloadCompanyZip('${co}')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="13" height="13"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg> ZIP
+      </button></div>`;
+    // 채널별 폴더 구조 표시
+    for (const a of items) {
+      const ob = a.isOriginalUsed ? ' <span style="font-size:10px;background:var(--warn-bg);color:var(--warn-text);border-radius:3px;padding:1px 5px">원본</span>' : '';
+      const pb = a.isPinned ? ' <span style="font-size:10px;background:#FDE8FF;color:#7E22CE;border-radius:3px;padding:1px 5px">📌 필수</span>' : '';
+      h += `<div style="border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:6px;overflow:hidden">
+        <div style="background:var(--surface2);padding:6px 12px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px">
+          <span style="opacity:.6">📁</span> ${a.folderName}
+          <span style="font-size:11px;font-weight:400;color:var(--text3);margin-left:4px">표지 1개 + 속지 ${a.inners.length}개</span>
+        </div>
+        <div style="padding:6px 12px 8px;display:flex;flex-wrap:wrap;gap:4px">
+          <span class="cover-chip normal">🖼 ${a.coverName}${ob}${pb}</span>
+          ${a.inners.map(inn => `<span class="cover-chip inner">${inn.name}</span>`).join('')}
+        </div>
+      </div>`;
+    }
+    h += `</div>`;
+  }
+  document.getElementById('bByCompanyContent').innerHTML = h;
+
+  let h2 = '<div class="result-scroll"><table class="data-table"><thead><tr><th>날짜</th><th>업체</th><th>채널</th><th>마더파일</th><th>표지 파일</th><th>속지 수</th></tr></thead><tbody>';
+  for (const a of bAssignments) {
+    const ob = a.isOriginalUsed ? ' <span style="font-size:10px;background:var(--warn-bg);color:var(--warn-text);border-radius:3px;padding:1px 5px">원본</span>' : '';
+    const pb = a.isPinned ? ' <span style="font-size:10px;background:#FDE8FF;color:#7E22CE;border-radius:3px;padding:1px 5px">📌</span>' : '';
+    h2 += `<tr><td class="nowrap">${a.date}</td><td class="nowrap company-cell">${a.company}</td><td class="nowrap">${a.channel}</td><td style="font-size:11px">${a.motherName}</td><td class="mono">${a.coverName}${ob}${pb}</td><td style="text-align:center">${a.inners.length}</td></tr>`;
+  }
+  h2 += '</tbody></table></div>';
+  document.getElementById('bAllTableContent').innerHTML = h2;
+
+  const origUsed = bConflictLog.filter(c => c.type === 'original_used');
+  const dateLockIgnored = bConflictLog.filter(c => c.type === 'date_lock_ignored');
+  const surplusLog = bConflictLog.filter(c => c.type === 'unused_surplus');
+  if (!origUsed.length && !dateLockIgnored.length && !surplusLog.length) {
+    document.getElementById('bConflictsContent').innerHTML = '<p style="font-size:13px;color:var(--text3);padding:.5rem 0">원본 표지 사용 없음 — 모든 배정이 일반 표지로 처리됐습니다.</p>';
+  } else {
+    let h3 = '';
+    if (dateLockIgnored.length) {
+      h3 += `<div class="msg warn" style="margin-bottom:.75rem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:15px;height:15px;flex-shrink:0"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>지정 날짜/채널 소재 부족으로 lock 무시 ${dateLockIgnored.length}건 발생</div>`;
+      for (const c of dateLockIgnored) {
+        h3 += `<div class="conflict-row"><b>${c.company}</b> / <b>${c.channel}</b> (${c.date}) — lock 무시 배정: <span style="font-family:'Courier New',monospace;font-size:11px">${c.coverName}</span> <span style="font-size:10px;color:var(--text3)">(마더: ${c.motherName})</span></div>`;
+      }
+    }
+    if (origUsed.length) {
+      h3 += `<div class="msg warn" style="margin-bottom:.75rem;margin-top:${h3?'.75rem':'0'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:15px;height:15px;flex-shrink:0"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>일반 표지 부족으로 원본 표지 ${origUsed.length}건 사용됨</div>`;
+      for (const c of origUsed) {
+        h3 += `<div class="conflict-row"><b>${c.company}</b> / <b>${c.channel}</b> (${c.date}) — 원본 표지 배정: <span style="font-family:'Courier New',monospace;font-size:11px">${c.coverName}</span></div>`;
+      }
+    }
+    if (surplusLog.length) {
+      const items = surplusLog.flatMap(s => s.items);
+      h3 += `<div class="msg warn" style="margin-bottom:.75rem;margin-top:${h3?'.75rem':'0'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:15px;height:15px;flex-shrink:0"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>잉여 표지 ${items.length}건 — 스케줄 수 초과로 배정되지 않음</div>`;
+      for (const it of items) {
+        h3 += `<div class="conflict-row">마더: <b>${it.motherName}</b> &nbsp;/&nbsp; 표지: <span style="font-family:'Courier New',monospace;font-size:11px">${it.coverName}</span></div>`;
+      }
+    }
+    document.getElementById('bConflictsContent').innerHTML = h3;
+  }
+}
+
+function bSwitchTab(id, el) {
+  document.querySelectorAll('#bstep4 .tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('#bstep4 .tab-pane').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('bpane-'+id).classList.add('active');
+}
+
+function bDownloadCSV() {
+  const rows = [['날짜','업체','채널','마더파일','표지파일','속지수']];
+  for (const a of bAssignments) rows.push([a.date, a.company, a.channel, a.motherName, a.coverName, a.inners.length]);
+  const csv = '\uFEFF' + rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+  dlBlob(new Blob([csv], { type:'text/csv;charset=utf-8' }), '배너_배정표.csv');
+}
+
+async function bDownloadCompanyZip(co) {
+  const btn = event?.target?.closest('button');
+  if (btn) { btn.disabled=true; btn.textContent='생성 중...'; }
+  try {
+    const zip = new JSZip();
+    for (const a of bAssignments.filter(x => x.company === co)) {
+      const folder = zip.folder(a.folderName);
+      folder.file(a.coverName, a.coverBlob);
+      for (const inn of a.inners) folder.file(inn.name, inn.blob);
+      if (a.caption) folder.file('캡션_해시태그.txt', new Blob([a.caption], { type:'text/plain;charset=utf-8' }));
+    }
+    dlBlob(await zip.generateAsync({ type:'blob' }), `${co}.zip`);
+  } finally {
+    if (btn) { btn.disabled=false; btn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="13" height="13"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg> ZIP'; }
+  }
+}
+
+async function bDownloadZipAll() {
+  const companies = [...new Set(bAssignments.map(a => a.company))];
+  const dlBtn = document.getElementById('bZipAllBtn');
+  if (dlBtn) { dlBtn.disabled=true; dlBtn.textContent='ZIP 생성 중...'; }
+
+  const outerZip = new JSZip();
+  for (const co of companies) {
+    const innerZip = new JSZip();
+    for (const a of bAssignments.filter(x => x.company === co)) {
+      const folder = innerZip.folder(a.folderName);
+      folder.file(a.coverName, a.coverBlob);
+      for (const inn of a.inners) folder.file(inn.name, inn.blob);
+      if (a.caption) folder.file('캡션_해시태그.txt', new Blob([a.caption], { type:'text/plain;charset=utf-8' }));
+    }
+    const innerBlob = await innerZip.generateAsync({ type:'uint8array' });
+    outerZip.file(`${co}.zip`, innerBlob);
+  }
+  dlBlob(await outerZip.generateAsync({ type:'blob' }), '전체_배너배정.zip');
+
+  if (dlBtn) {
+    dlBtn.disabled=false;
+    dlBtn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="14" height="14"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg> 업체별 ZIP 일괄 다운로드';
+    showToast(`${companies.length}개 업체 배너 ZIP 완료`);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// ── HISTORY MODULE ────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+const HIST_KEY = 'viral_assign_history';
+const HIST_TTL_DAYS = 7;
+
+function saveHistory(mode, items) {
+  let hist = {};
+  try { hist = JSON.parse(localStorage.getItem(HIST_KEY) || '{}'); } catch(e) {}
+  const now = Date.now();
+  const todayKey = new Date().toISOString().slice(0, 10);
+  if (!hist[todayKey]) hist[todayKey] = [];
+  hist[todayKey].push({ ts: now, mode, count: items.length, items });
+  // 7일 이전 데이터 삭제
+  const cutoff = now - HIST_TTL_DAYS * 86400000;
+  for (const key of Object.keys(hist)) {
+    if (new Date(key).getTime() < cutoff) delete hist[key];
+  }
+  try { localStorage.setItem(HIST_KEY, JSON.stringify(hist)); } catch(e) { console.warn('히스토리 저장 실패:', e); }
+}
+
+function renderHistory() {
+  let hist = {};
+  try { hist = JSON.parse(localStorage.getItem(HIST_KEY) || '{}'); } catch(e) {}
+  const keys = Object.keys(hist).sort().reverse();
+  const el = document.getElementById('histContent');
+  if (!keys.length) { el.innerHTML = '<div class="hist-empty">아직 배정 기록이 없습니다.</div>'; return; }
+  let h = '<div class="hist-panel">';
+  for (const day of keys) {
+    const entries = hist[day];
+    h += `<div class="hist-day"><div class="hist-day-label">${day} (${entries.reduce((s,e)=>s+e.count,0)}건)</div>`;
+    for (const e of [...entries].reverse()) {
+      const t = new Date(e.ts).toLocaleTimeString('ko-KR', { hour:'2-digit', minute:'2-digit' });
+      const badge = `<span class="hist-badge ${e.mode}">${e.mode === 'video' ? '영상' : '배너'}</span>`;
+      const companies = [...new Set(e.items.map(i => i.company))];
+      const summary = companies.map(co => `<b>${co}</b> ${e.items.filter(i=>i.company===co).length}건`).join(' · ');
+      h += `<div class="hist-row">${badge}<span style="color:var(--text3);font-size:11px;flex-shrink:0">${t}</span><span style="flex:1">${e.count}개 — ${summary}</span></div>`;
+      h += `<div style="padding:3px 0 6px 56px;display:flex;flex-wrap:wrap;gap:3px">`;
+      for (const it of e.items) {
+        const fname = it.fileName || it.coverName || '';
+        h += `<span style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-size:11px;font-family:'Courier New',monospace">${it.date} ${it.channel}·${fname}</span>`;
+      }
+      h += `</div>`;
+    }
+    h += `</div>`;
+  }
+  h += '</div>';
+  el.innerHTML = h;
+}
+
+function clearHistory() {
+  if (!confirm('배정 히스토리를 전체 삭제하시겠습니까?')) return;
+  localStorage.removeItem(HIST_KEY);
+  renderHistory();
+  showToast('히스토리 삭제 완료');
+}
+
+// ── Fill handle: scope-aware (video / banner) ─────────────────
+let fillState = { active: false, srcRow: -1, srcCol: -1, curRow: -1, scope: 'video' };
+let focusedCell = { r: -1, c: -1, scope: 'video' };
+const colKeys = ['date','company','channel'];
+
+function setFocusedCell(r, c, scope='video') {
+  document.querySelectorAll('#schedBody td.focused, #bSchedBody td.focused').forEach(td => td.classList.remove('focused'));
+  focusedCell = { r, c, scope };
+  const bodyId = scope === 'banner' ? 'bSchedBody' : 'schedBody';
+  document.querySelector(`#${bodyId} td[data-row="${r}"][data-col="${c}"]`)?.classList.add('focused');
+}
+
+function startFill(e, r, c, scope='video') {
+  e.preventDefault(); e.stopPropagation();
+  fillState = { active: true, srcRow: r, srcCol: c, curRow: r, scope };
+  document.body.style.cursor = 'crosshair';
+  const bodyId = scope === 'banner' ? 'bSchedBody' : 'schedBody';
+  const rows   = scope === 'banner' ? bSchedRows : schedRows;
+
+  function onMove(ev) {
+    if (!fillState.active) return;
+    const el = document.elementFromPoint(ev.clientX, ev.clientY);
+    const td = el?.closest(`#${bodyId} td[data-row]`);
+    if (!td) return;
+    const hoverRow = +td.dataset.row;
+    if (hoverRow < fillState.srcRow) return;
+    fillState.curRow = hoverRow;
+    while (rows.length <= fillState.curRow) {
+      rows.push({ date:'', company:'', channel:'' });
+      scope === 'banner' ? bRenderSched() : renderSched();
+    }
+    document.querySelectorAll(`#${bodyId} td.fill-preview`).forEach(t => t.classList.remove('fill-preview'));
+    for (let row = fillState.srcRow + 1; row <= fillState.curRow; row++) {
+      document.querySelector(`#${bodyId} td[data-row="${row}"][data-col="${fillState.srcCol}"]`)?.classList.add('fill-preview');
+    }
+  }
+
+  function onUp() {
+    if (!fillState.active) return;
+    fillState.active = false;
+    document.body.style.cursor = '';
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    document.querySelectorAll(`#${bodyId} td.fill-preview`).forEach(t => t.classList.remove('fill-preview'));
+    if (fillState.curRow <= fillState.srcRow) return;
+    const srcVal = rows[fillState.srcRow][colKeys[fillState.srcCol]];
+    for (let row = fillState.srcRow + 1; row <= fillState.curRow; row++) rows[row][colKeys[fillState.srcCol]] = srcVal;
+    scope === 'banner' ? bRenderSched() : renderSched();
+    setFocusedCell(fillState.srcRow, fillState.srcCol, scope);
+    showToast(`${fillState.curRow - fillState.srcRow}개 행 채움 완료`);
+  }
+
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+</script>
+</body>
+</html>
